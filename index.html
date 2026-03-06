@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>UiTM Dungeon: Semester Quest</title>
+<style>
+  :root { --bg: #050505; --ui-bg: #1a1a1a; --ui-border: #4a4a4a; --accent: #f1c40f; }
+  body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Courier New', monospace; color: white; touch-action: none; }
+  canvas { display: block; margin: 0 auto; background: #111; image-rendering: pixelated; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+  
+  /* --- UI HUD --- */
+  #ui-layer { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; pointer-events: none; box-sizing: border-box; z-index: 10; }
+  .hud-panel { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.7); padding: 5px 10px; border: 2px solid #333; border-radius: 8px; margin-bottom: 5px; backdrop-filter: blur(2px); }
+  
+  .stat-group { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 14px; }
+  .icon { font-size: 18px; }
+  
+  .bar-container { width: 100px; height: 10px; background: #333; border: 1px solid #fff; position: relative; border-radius: 2px; }
+  .bar-fill { height: 100%; width: 100%; transition: width 0.3s ease-out; }
+  #hp-fill { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+  
+  /* --- CONTROLS (Fixed Layout) --- */
+  #dpad { 
+    position: absolute; bottom: 30px; left: 30px; 
+    width: 150px; height: 150px; 
+    pointer-events: auto; z-index: 20;
+  }
+  .d-btn { 
+    position: absolute; width: 50px; height: 50px; 
+    background: rgba(255,255,255,0.15); 
+    border: 2px solid rgba(255,255,255,0.3); 
+    border-radius: 8px; 
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; user-select: none;
+  }
+  .d-btn:active { background: rgba(255,255,255,0.4); transform: scale(0.95); }
+  
+  /* Perfect Cross Layout */
+  #up { top: 0; left: 50px; }
+  #down { bottom: 0; left: 50px; }
+  #left { top: 50px; left: 0; }
+  #right { top: 50px; right: 0; }
+
+  #action-btn { 
+    position: absolute; bottom: 50px; right: 30px; 
+    width: 90px; height: 90px; 
+    background: linear-gradient(135deg, #f39c12, #d35400); 
+    border: 4px solid #fff; border-radius: 50%; 
+    pointer-events: auto; z-index: 20;
+    display: flex; align-items: center; justify-content: center; 
+    font-weight: 900; font-size: 20px; text-shadow: 1px 1px 0 #000;
+    box-shadow: 0 8px 15px rgba(0,0,0,0.5);
+  }
+  #action-btn:active { transform: translateY(4px); box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+
+  /* --- MODALS --- */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; display: none; align-items: center; justify-content: center; }
+  .pixel-modal { background: #2c3e50; border: 4px solid #fff; padding: 20px; width: 85%; max-width: 350px; text-align: center; position: relative; box-shadow: 0 0 30px #000; }
+  .pixel-modal h2 { margin-top: 0; color: var(--accent); border-bottom: 2px dashed #555; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; }
+  
+  .btn-retro { 
+    background: #333; color: #fff; border: 2px solid #fff; 
+    padding: 12px; margin: 8px 0; width: 100%; 
+    font-family: inherit; font-weight: bold; cursor: pointer; 
+    transition: all 0.1s;
+  }
+  .btn-retro:hover { background: #fff; color: #000; }
+
+  #toast { 
+    position: absolute; top: 20%; left: 50%; transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); color: #f1c40f; 
+    padding: 10px 20px; border: 2px solid #f1c40f; 
+    font-size: 18px; font-weight: bold; opacity: 0; pointer-events: none; 
+    z-index: 50; transition: opacity 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<div id="ui-layer">
+  <div class="hud-panel">
+    <div class="stat-group">
+      <span class="icon">📅</span> <span id="day-disp">DAY 1</span>
+    </div>
+    <div class="stat-group" style="color: var(--accent)">
+      <span class="icon">🎓</span> <span id="gpa-disp">2.00</span>
+    </div>
+  </div>
+  <div class="hud-panel">
+    <div class="stat-group">
+      <span class="icon">⚡</span>
+      <div class="bar-container"><div id="hp-fill" class="bar-fill"></div></div>
+    </div>
+    <div class="stat-group">
+      <span class="icon">💰</span> RM <span id="money-disp">50</span>
+    </div>
+  </div>
+  <div style="text-align: center; font-size: 10px; opacity: 0.6; margin-top: 5px;">LOCATION: <span id="loc-name">DUNGEON ROOM</span></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="dpad">
+  <div class="d-btn" id="up">▲</div>
+  <div class="d-btn" id="down">▼</div>
+  <div class="d-btn" id="left">◀</div>
+  <div class="d-btn" id="right">▶</div>
+</div>
+<div id="action-btn" onclick="handleInteract()">ACT</div>
+
+<!-- Modal System -->
+<div id="modal" class="modal-overlay">
+  <div class="pixel-modal">
+    <h2 id="m-title">Title</h2>
+    <div id="m-content"></div>
+    <div id="m-choices"></div>
+  </div>
+</div>
+
+<div id="toast">Quest Update!</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- CONFIG & STATE ---
+const TILE_SIZE = 48; // Bigger tiles for detail
+let width, height;
+const state = {
+  day: 1, maxDays: 14,
+  energy: 100, money: 50, gpa: 2.00,
+  x: 2, y: 2, map: 'dorm',
+  frame: 0 // For animation
+};
+
+// --- ASSET GENERATOR (Procedural Graphics) ---
+// We draw sprites to offscreen canvases so we don't use external images
+const sprites = {};
+
+function createTexture(color, pattern) {
+  const c = document.createElement('canvas');
+  c.width = TILE_SIZE; c.height = TILE_SIZE;
+  const x = c.getContext('2d');
+  
+  // Base
+  x.fillStyle = color;
+  x.fillRect(0,0,TILE_SIZE,TILE_SIZE);
+  
+  // Pattern
+  x.fillStyle = "rgba(0,0,0,0.2)";
+  if (pattern === 'brick') {
+    x.fillRect(0, 10, TILE_SIZE, 2);
+    x.fillRect(0, 30, TILE_SIZE, 2);
+    x.fillRect(10, 0, 2, 10);
+    x.fillRect(30, 0, 2, 10);
+    x.fillRect(20, 10, 2, 20);
+  } else if (pattern === 'floor') {
+    x.fillRect(0,0,TILE_SIZE,2);
+    x.fillRect(0,0,2,TILE_SIZE);
+    x.fillStyle = "rgba(255,255,255,0.05)";
+    x.fillRect(5,5,TILE_SIZE-10, TILE_SIZE-10);
+  } else if (pattern === 'wood') {
+    x.fillStyle = "#5d4037"; x.fillRect(0,0,TILE_SIZE,TILE_SIZE);
+    x.fillStyle = "#3e2723"; x.fillRect(5,0,5,TILE_SIZE); x.fillRect(25,0,5,TILE_SIZE);
+  }
+  return c;
+}
+
+function createChar(color, type) {
+  const c = document.createElement('canvas');
+  c.width = TILE_SIZE; c.height = TILE_SIZE;
+  const x = c.getContext('2d');
+  
+  // Shadow
+  x.fillStyle = "rgba(0,0,0,0.5)";
+  x.beginPath(); x.ellipse(24, 40, 15, 5, 0, 0, Math.PI*2); x.fill();
+
+  // Body
+  x.fillStyle = color;
+  x.fillRect(14, 20, 20, 20); // Torso
+  
+  // Head
+  x.fillStyle = "#f1c40f"; // Skin
+  x.fillRect(16, 8, 16, 16);
+  
+  // Details
+  if (type === 'player') {
+    x.fillStyle = "#3498db"; // Robe
+    x.fillRect(12, 20, 24, 18);
+    x.fillStyle = "#2980b9"; // Hood
+    x.fillRect(14, 4, 20, 8);
+  } else if (type === 'guard') {
+    x.fillStyle = "#c0392b"; // Armor
+    x.fillRect(12, 18, 24, 22);
+    x.fillStyle = "#ecf0f1"; // Helmet
+    x.fillRect(16, 6, 16, 14);
+    x.fillStyle = "#000"; x.fillRect(18, 12, 12, 4); // Visor
+  }
+  return c;
+}
+
+// Initialize Assets
+const assets = {
+  floor: createTexture('#34495e', 'floor'),
+  wall: createTexture('#7f8c8d', 'brick'),
+  door: createTexture('#e67e22', 'wood'),
+  bed: createTexture('#9b59b6', 'wood'),
+  player: createChar('#3498db', 'player'),
+  guard: createChar('#c0392b', 'guard')
+};
+
+// --- MAPS ---
+// 0=Floor, 1=Wall, 2=Door, 3=Bed, 4=Guard, 5=Desk, 6=Gym
+const maps = {
+  dorm: {
+    w: 10, h: 10, name: "DORMITORY (SAFE ZONE)",
+    data: [
+      1,1,1,1,1,1,1,1,1,1,
+      1,3,0,0,0,5,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,1,
+      1,0,1,1,0,0,1,1,0,1,
+      1,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,2,2,1,1,1,1,
+      1,1,1,1,0,0,1,1,1,1,
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0
+    ],
+    exits: [{x:4, y:6, to:'hallway', tx:2, ty:2}, {x:5, y:6, to:'hallway', tx:2, ty:2}]
+  },
+  hallway: {
+    w: 16, h: 8, name: "THE GAUNTLET (HALLWAY)",
+    data: [
+      1,1,2,1,1,1,1,1,1,1,1,1,2,1,1,1,
+      1,0,0,0,0,4,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,
+      1,0,0,1,1,1,0,0,0,0,1,1,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,4,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,
+      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ],
+    exits: [
+      {x:2, y:0, to:'dorm', tx:4, ty:5},
+      {x:15, y:2, to:'cafe', tx:1, ty:2},
+      {x:12, y:0, to:'library', tx:5, ty:8},
+      {x:6, y:6, to:'sports', tx:5, ty:1}
+    ]
+  },
+  library: {
+    w: 12, h: 10, name: "ARCHIVES OF KNOWLEDGE",
+    data: [
+      1,1,1,1,1,1,1,1,1,1,1,1,
+      1,5,5,5,0,0,5,5,0,0,5,1,
+      1,5,5,5,0,0,5,5,0,0,5,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,1,0,0,1,1,1,1,1,
+      1,1,1,1,1,2,2,1,1,1,1,1,
+      0,0,0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0,0,0
+    ],
+    exits: [{x:5, y:7, to:'hallway', tx:12, ty:1}, {x:6, y:7, to:'hallway', tx:12, ty:1}]
+  },
+  sports: { w:10, h:10, name: "TRAINING GROUNDS", data: Array(100).fill(0).map((_,i)=> i<10||i%10===0||i%10===9||i>90 ? 1 : 6), exits: [{x:5, y:0, to:'hallway', tx:6, ty:5}] },
+  cafe: { w:8, h:8, name: "TAVERN (MAMAK)", data: [1,1,1,1,1,1,1,1, 1,5,5,0,0,0,0,1, 2,0,0,0,0,0,0,1, 1,0,1,1,0,0,0,1, 1,0,0,0,0,0,0,1, 1,1,1,1,1,1,1,1, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0], exits: [{x:0, y:2, to:'hallway', tx:14, ty:2}] }
+};
+maps.sports.data[5] = 2; // Fix door
+
+// --- ENGINE ---
+function resize() {
+  width = window.innerWidth; height = window.innerHeight;
+  canvas.width = width; canvas.height = height;
+  ctx.imageSmoothingEnabled = false; // Pixel perfect
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Controls
+const keys = { w:false, a:false, s:false, d:false };
+const bindBtn = (id, k) => {
+  const b = document.getElementById(id);
+  b.onmousedown = b.ontouchstart = (e) => { e.preventDefault(); keys[k] = true; };
+  b.onmouseup = b.ontouchend = (e) => { e.preventDefault(); keys[k] = false; };
+};
+bindBtn('up','w'); bindBtn('down','s'); bindBtn('left','a'); bindBtn('right','d');
+
+// Animation Loop
+setInterval(() => { state.frame = (state.frame + 1) % 20; }, 100);
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+function update() {
+  if (state.day > state.maxDays) return;
+  
+  const speed = 0.15;
+  let dx=0, dy=0;
+  if(keys.w) dy=-speed; if(keys.s) dy=speed;
+  if(keys.a) dx=-speed; if(keys.d) dx=speed;
+
+  if (dx || dy) {
+    if(!isSolid(state.x+dx, state.y)) state.x += dx;
+    if(!isSolid(state.x, state.y+dy)) state.y += dy;
+    checkTile();
+  }
+}
+
+function isSolid(x, y) {
+  const m = maps[state.map];
+  if(x<0 || x>=m.w || y<0 || y>=m.h) return true;
+  const t = m.data[Math.floor(y)*m.w + Math.floor(x)];
+  return t === 1; 
+}
+
+function checkTile() {
+  const m = maps[state.map];
+  const tx = Math.round(state.x);
+  const ty = Math.round(state.y);
+  
+  // Door
+  const ex = m.exits.find(e => e.x === tx && e.y === ty);
+  if(ex) {
+    state.map = ex.to; state.x = ex.tx; state.y = ex.ty;
+    document.getElementById('loc-name').innerText = maps[state.map].name;
+    showToast("Entered " + maps[state.map].name);
+    return;
+  }
+  
+  // Guard Trigger (Tile 4)
+  const t = m.data[ty*m.w + tx];
+  if(t === 4) {
+    state.x -= 1; // Push back
+    openModal("⚔️ ENEMY ENCOUNTER", "The Pak Guard blocks your path!", [
+      {t:"Convince (Cha)", cb:()=>resolveGuard(0.6)}, 
+      {t:"Run Away (Dex)", cb:()=>resolveGuard(0.3)}
+    ]);
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#050505'; ctx.fillRect(0,0,width,height);
+  
+  if (state.day > state.maxDays) { drawEnd(); return; }
+
+  const m = maps[state.map];
+  const camX = Math.floor(state.x * TILE_SIZE - width/2);
+  const camY = Math.floor(state.y * TILE_SIZE - height/2);
+  
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  // Draw Map
+  for(let y=0; y<m.h; y++) {
+    for(let x=0; x<m.w; x++) {
+      const t = m.data[y*m.w + x];
+      const px = x*TILE_SIZE, py = y*TILE_SIZE;
+      
+      // Floor background everywhere
+      ctx.drawImage(assets.floor, px, py);
+      
+      if(t===1) ctx.drawImage(assets.wall, px, py);
+      if(t===2) ctx.drawImage(assets.door, px, py);
+      if(t===3) { ctx.fillStyle='#8e44ad'; ctx.fillRect(px+5,py+10,38,28); ctx.fillStyle='#fff'; ctx.fillText('BED', px+10, py+30); }
+      if(t===4) ctx.drawImage(assets.guard, px, py);
+      if(t===5) { ctx.fillStyle='#d35400'; ctx.fillRect(px+5,py+10,38,28); } // Table
+      if(t===6) { ctx.fillStyle='#27ae60'; ctx.fillRect(px,py,TILE_SIZE,TILE_SIZE); } // Gym Floor
+    }
+  }
+
+  // Draw Player (with bobbing animation)
+  const bob = Math.sin(state.frame) * 2;
+  ctx.drawImage(assets.player, state.x*TILE_SIZE, state.y*TILE_SIZE + bob);
+  
+  // Label
+  ctx.fillStyle = "white"; ctx.font = "10px monospace";
+  ctx.fillText("YOU", state.x*TILE_SIZE + 12, state.y*TILE_SIZE - 5);
+
+  ctx.restore();
+}
+
+function drawEnd() {
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+  ctx.font = "30px Courier New";
+  ctx.fillText(state.gpa >= 3.5 ? "QUEST COMPLETE!" : "GAME OVER", width/2, height/3);
+  ctx.font = "20px Courier New";
+  ctx.fillText(`Final GPA: ${state.gpa.toFixed(2)}`, width/2, height/2);
+}
+
+// --- INTERACTION SYSTEM ---
+function handleInteract() {
+  const m = maps[state.map];
+  const tx = Math.round(state.x); const ty = Math.round(state.y);
+  const t = m.data[ty*m.w + tx];
+
+  // Proximity Check (Current or Adjacent)
+  // Simplified: Just check current tile
+  
+  if(state.map === 'dorm' && t === 3) {
+     openModal("🌙 REST", "End the day to restore energy?", [{t:"Sleep (Save)", cb:sleep}, {t:"Cancel", cb:closeModal}]);
+  }
+  else if(state.map === 'library' && t === 5) {
+     openModal("📖 ANCIENT TOME", "Study specifically for exams?", [
+       {t:"Start Pomodoro (Buff)", cb:startPomodoro}, 
+       {t:"Quick Read (-10 NRGY)", cb:()=>modStat(-10, 0.02, 0)}
+     ]);
+  }
+  else if(state.map === 'cafe' && t === 5) {
+     openModal("🍖 TAVERN KEEPER", "Buy rations?", [
+       {t:"Nasi Lemak (-RM10)", cb:()=>buyFood(10, 20)},
+       {t:"Maggi (-RM2)", cb:()=>buyFood(2, -5)}
+     ]);
+  }
+  else {
+     showToast("Nothing here.");
+  }
+}
+
+// Logic
+function resolveGuard(chance) {
+  closeModal();
+  if(Math.random() < chance) showToast("Escaped!");
+  else {
+    state.money -= 20; state.gpa -= 0.05;
+    showToast("Fined! -RM20");
+    updateUI();
+  }
+}
+
+function sleep() {
+  state.day++; state.energy=100; 
+  closeModal(); showToast("Day "+state.day);
+  updateUI();
+}
+
+function startPomodoro() {
+  closeModal();
+  // Simulating Pomodoro for demo
+  showToast("⏳ STUDYING... (Wait)");
+  setTimeout(() => {
+    modStat(-30, 0.25, 10);
+    showToast("Knowledge Gained!");
+  }, 2000);
+}
+
+function buyFood(cost, hp) {
+  if(state.money < cost) { showToast("Not enough gold!"); return; }
+  state.money -= cost; state.energy += hp;
+  closeModal(); updateUI(); showToast("Consumed.");
+}
+
+function modStat(e, g, m) {
+  state.energy += e; state.gpa += g; state.money += m;
+  if(state.energy>100) state.energy=100;
+  if(state.gpa>4.0) state.gpa=4.0;
+  updateUI();
+}
+
+function updateUI() {
+  document.getElementById('hp-fill').style.width = state.energy + "%";
+  document.getElementById('money-disp').innerText = state.money;
+  document.getElementById('gpa-disp').innerText = state.gpa.toFixed(2);
+  document.getElementById('day-disp').innerText = "DAY " + state.day;
+}
+
+// Modal Utils
+function openModal(title, body, acts) {
+  document.getElementById('m-title').innerText = title;
+  document.getElementById('m-content').innerHTML = `<p>${body}</p>`;
+  const c = document.getElementById('m-choices');
+  c.innerHTML = '';
+  acts.forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'btn-retro'; b.innerText = a.t; b.onclick = a.cb;
+    c.appendChild(b);
+  });
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function showToast(m) {
+  const t = document.getElementById('toast'); t.innerText = m; t.style.opacity = 1;
+  setTimeout(()=>t.style.opacity=0, 2000);
+}
+
+</script>
+</body>
+</html>
