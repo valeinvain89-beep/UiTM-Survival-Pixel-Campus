@@ -3,159 +3,488 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#6A0DAD"> <!-- UiTM Purple -->
-<title>PixelCampus: Survival</title>
+<title>PixelCampus: Dean's List Run</title>
 <style>
-  :root { --bg: #2d2d2d; --text: #f0f0f0; --accent: #A64AC9; --pixel-font: 'Courier New', monospace; }
-  body { background: var(--bg); color: var(--text); font-family: var(--pixel-font); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Courier New', monospace; color: white; touch-action: none; }
+  canvas { display: block; margin: 0 auto; background: #333; border: 2px solid #555; image-rendering: pixelated; }
   
-  /* UI Components */
-  .header { padding: 15px; background: #1a1a1a; border-bottom: 4px solid var(--accent); display: flex; justify-content: space-between; }
-  .stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #333; font-size: 0.8rem; }
-  .stat-box { background: #444; padding: 5px; text-align: center; border: 2px solid #000; }
+  /* UI Layer */
+  #ui-layer { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; pointer-events: none; box-sizing: border-box; }
+  .hud-row { display: flex; justify-content: space-between; margin-bottom: 5px; text-shadow: 1px 1px 0 #000; }
   
-  .game-view { flex: 1; position: relative; background-image: repeating-linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%, #333), repeating-linear-gradient(45deg, #333 25%, #2d2d2d 25%, #2d2d2d 75%, #333 75%, #333); background-position: 0 0, 10px 10px; background-size: 20px 20px; display: flex; align-items: center; justify-content: center; }
-  .pixel-art-sprite { width: 64px; height: 64px; background: var(--accent); box-shadow: 4px 4px 0px #000; image-rendering: pixelated; }
+  .bar-wrap { width: 120px; height: 12px; background: #000; border: 1px solid #fff; position: relative; }
+  .bar-fill { height: 100%; transition: width 0.3s; }
+  #hp-bar { background: #e74c3c; width: 100%; }
+  #xp-bar { background: #3498db; width: 0%; } /* CGPA Progress */
+
+  .stat-box { background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; border: 1px solid #444; font-weight: bold; font-size: 14px; }
+  .c-gpa { color: #f1c40f; } .c-day { color: #2ecc71; }
+
+  /* Controls */
+  #dpad { position: absolute; bottom: 20px; left: 20px; width: 140px; height: 140px; pointer-events: auto; opacity: 0.6; }
+  .d-btn { position: absolute; width: 45px; height: 45px; background: #fff; border-radius: 8px; opacity: 0.4; border: 2px solid #000; }
+  .d-btn:active { background: #aaa; opacity: 0.8; }
+  #up { top: 0; left: 47px; } #down { bottom: 0; left: 47px; }
+  #left { top: 47px; left: 0; } #right { top: 47px; right: 94px; }
+
+  #action-btn { position: absolute; bottom: 40px; right: 30px; width: 90px; height: 90px; background: #e74c3c; border-radius: 50%; border: 4px solid #fff; pointer-events: auto; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; box-shadow: 4px 4px 0 #000; user-select: none; }
+  #action-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+
+  /* Modals */
+  .modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; color: #000; padding: 20px; border: 4px solid #000; display: none; width: 85%; max-width: 320px; text-align: center; pointer-events: auto; box-shadow: 10px 10px 0 rgba(0,0,0,0.8); z-index: 100; }
+  .modal h2 { margin-top: 0; border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+  .btn { background: #333; color: #fff; border: 2px solid #000; padding: 12px; margin: 5px; cursor: pointer; font-family: inherit; width: 90%; font-weight: bold; display: block; margin-left: auto; margin-right: auto; }
+  .btn:hover { background: #555; }
   
-  .log-panel { height: 150px; overflow-y: auto; background: #000; color: #0f0; padding: 10px; font-size: 0.9rem; border-top: 4px solid var(--accent); }
-  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; background: #1a1a1a; }
+  /* Pomodoro Overlay */
+  #pomo-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 200; display: none; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  #timer-display { font-size: 60px; margin: 20px; color: #e74c3c; }
   
-  button { background: var(--accent); color: white; border: 4px solid #1a1a1a; padding: 15px; font-family: var(--pixel-font); font-weight: bold; text-transform: uppercase; touch-action: manipulation; active { transform: translate(2px, 2px); } }
-  
-  /* PWA Manifest Link (Simulated) */
-  link[rel="manifest"] { href: "/manifest.json"; }
+  /* Toast */
+  #toast { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: #f1c40f; padding: 8px 16px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; border: 1px solid #f1c40f; z-index: 50; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div>LVL 1 FRESHIE</div>
-  <div id="day-display">WK 1 - MON</div>
+<div id="ui-layer">
+  <div class="hud-row">
+    <div class="stat-box c-day" id="day-disp">DAY 1/14</div>
+    <div class="stat-box c-gpa">CGPA: <span id="gpa-disp">2.00</span></div>
+  </div>
+  <div class="hud-row">
+    <div class="bar-wrap"><div id="hp-bar" class="bar-fill"></div></div>
+    <div class="stat-box">RM <span id="money-disp">50</span></div>
+  </div>
+  <div style="text-align: center; font-size: 10px; margin-top: 5px; opacity: 0.7;">LOC: <span id="loc-name">ROOM</span></div>
 </div>
 
-<div class="stats-bar">
-  <div class="stat-box">⚡ ENERGY: <span id="val-energy">100</span>%</div>
-  <div class="stat-box">🧠 CGPA: <span id="val-gpa">3.50</span></div>
-  <div class="stat-box">💰 RM: <span id="val-money">150</span></div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Controls -->
+<div id="dpad">
+  <div class="d-btn" id="up"></div><div class="d-btn" id="down"></div>
+  <div class="d-btn" id="left"></div><div class="d-btn" id="right"></div>
+</div>
+<div id="action-btn" onclick="handleInteract()">USE</div>
+
+<!-- Dialogue Modal -->
+<div id="modal" class="modal">
+  <h2 id="m-title">Title</h2>
+  <p id="m-desc">Description text.</p>
+  <div id="m-choices"></div>
 </div>
 
-<div class="game-view">
-  <!-- Placeholder for Canvas/Sprite -->
-  <div class="pixel-art-sprite" id="player-sprite"></div>
-  <div style="position:absolute; bottom: 20px; text-shadow: 2px 2px 0 #000;">Location: Kolej Melati</div>
+<!-- Pomodoro Screen -->
+<div id="pomo-overlay">
+  <h2>🍅 DEEP FOCUS MODE</h2>
+  <p>Do not close the app!</p>
+  <div id="timer-display">25:00</div>
+  <p id="pomo-msg">Studying Algorithms...</p>
 </div>
 
-<div class="log-panel" id="game-log">
-  > Welcome to UiTM Simulator.<br>
-  > Orientation week is over.<br>
-</div>
-
-<div class="controls">
-  <button onclick="gameAction('study')">📚 Study (Pomodoro)</button>
-  <button onclick="gameAction('eat')">🍔 Eat (Mamak)</button>
-  <button onclick="gameAction('social')">🗣️ Lepak</button>
-  <button onclick="gameAction('sleep')">🛌 Sleep</button>
-</div>
+<div id="toast">+10 GPA</div>
 
 <script>
-  // Game State
-  let state = { energy: 100, gpa: 3.50, money: 150, week: 1, day: 1 };
-  const maxWeeks = 14;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-  function log(msg) {
-    const panel = document.getElementById('game-log');
-    panel.innerHTML = `> ${msg}<br>` + panel.innerHTML;
+// --- CONFIG & STATE ---
+const TILE_SIZE = 40;
+let width, height;
+
+const state = {
+  day: 1,
+  maxDays: 14,
+  energy: 100,
+  money: 50,
+  gpa: 2.00, // Starts low, must grind to 3.5
+  x: 2, y: 2,
+  map: 'dorm',
+  lastMove: 0
+};
+
+// Colors
+const C = {
+  wall: '#555', floor: '#2c3e50', door: '#f39c12',
+  bed: '#9b59b6', table: '#d35400', guard: '#c0392b',
+  sport: '#27ae60', book: '#2980b9'
+};
+
+// --- MAPS ---
+// 0=Floor, 1=Wall, 2=Door, 3=Bed, 4=Guard, 5=Table(Study), 6=Sport, 7=Books
+const maps = {
+  dorm: {
+    w: 10, h: 10,
+    name: "KOLEJ PERINDU (ROOM)",
+    data: [
+      1,1,1,1,1,1,1,1,1,1,
+      1,3,0,0,0,5,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,1,
+      1,0,0,1,1,0,0,0,0,1,
+      1,0,0,1,1,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,2,2,1,1,1,1
+    ],
+    exits: [{x:4, y:6, to:'hallway', tx: 2, ty: 2}, {x:5, y:6, to:'hallway', tx: 2, ty: 2}]
+  },
+  hallway: {
+    w: 16, h: 8,
+    name: "FACULTY HALLWAY",
+    data: [
+      1,1,2,1,1,1,1,1,1,1,1,1,2,1,1,1,
+      1,0,0,0,0,4,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2, /* Exit to Cafe */
+      1,0,0,1,1,1,0,0,0,0,1,1,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,4,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1
+    ],
+    exits: [
+      {x:2, y:0, to:'dorm', tx: 4, ty: 5},
+      {x:15, y:2, to:'cafe', tx: 1, ty: 2},
+      {x:12, y:0, to:'library', tx: 5, ty: 8},
+      {x:6, y:6, to:'sports', tx: 5, ty: 1}
+    ]
+  },
+  library: {
+    w: 12, h: 10,
+    name: "PTAR LIBRARY",
+    data: [
+      1,1,1,1,1,1,1,1,1,1,1,1,
+      1,7,7,7,0,0,5,5,0,0,7,1,
+      1,7,7,7,0,0,5,5,0,0,7,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,5,0,0,0,0,5,0,0,1,
+      1,0,0,5,0,0,0,0,5,0,0,1,
+      1,1,1,1,1,0,0,1,1,1,1,1,
+      1,1,1,1,1,2,2,1,1,1,1,1
+    ],
+    exits: [{x:5, y:7, to:'hallway', tx: 12, ty: 1}, {x:6, y:7, to:'hallway', tx: 12, ty: 1}]
+  },
+  sports: {
+    w: 12, h: 12,
+    name: "PUSAT SUKAN",
+    data: [
+      1,1,1,1,1,1,2,1,1,1,1,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,6,6,6,6,6,6,6,6,6,6,1,
+      1,6,6,6,6,6,6,6,6,6,6,1,
+      1,6,6,6,6,6,6,6,6,6,6,1,
+      1,6,6,6,6,6,6,6,6,6,6,1,
+      1,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,1,1,1,1,1,1
+    ],
+    exits: [{x:6, y:0, to:'hallway', tx: 6, ty: 5}]
+  },
+  cafe: {
+    w: 8, h: 8,
+    name: "MEDAN SELERA",
+    data: [
+      1,1,1,1,1,1,1,1,
+      1,5,5,0,0,0,0,1,
+      2,0,0,0,0,0,0,1,
+      1,0,1,1,0,0,0,1,
+      1,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,1,1
+    ],
+    exits: [{x:0, y:2, to:'hallway', tx: 14, ty: 2}]
+  }
+};
+
+// --- ENGINE ---
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const keys = { w:false, a:false, s:false, d:false };
+window.addEventListener('keydown', e => {
+  if(e.key==='w') keys.w=true; if(e.key==='s') keys.s=true;
+  if(e.key==='a') keys.a=true; if(e.key==='d') keys.d=true;
+});
+window.addEventListener('keyup', e => {
+  if(e.key==='w') keys.w=false; if(e.key==='s') keys.s=false;
+  if(e.key==='a') keys.a=false; if(e.key==='d') keys.d=false;
+});
+
+// Mobile Inputs
+const bindTouch = (id, key) => {
+  const el = document.getElementById(id);
+  el.ontouchstart = (e) => { e.preventDefault(); keys[key] = true; };
+  el.ontouchend = (e) => { e.preventDefault(); keys[key] = false; };
+};
+bindTouch('up','w'); bindTouch('down','s'); bindTouch('left','a'); bindTouch('right','d');
+
+// Game Loop
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+function update() {
+  // End Game Check
+  if (state.day > state.maxDays) return;
+
+  let dx=0, dy=0;
+  if(keys.w) dy=-0.15; if(keys.s) dy=0.15;
+  if(keys.a) dx=-0.15; if(keys.d) dx=0.15;
+
+  if (dx!==0 || dy!==0) {
+    let nx = state.x + dx;
+    let ny = state.y + dy;
+    
+    // Collision
+    if(!isSolid(nx, state.y)) state.x = nx;
+    if(!isSolid(state.x, ny)) state.y = ny;
+    
+    // Triggers
+    checkTileEvents();
+  }
+}
+
+function isSolid(x, y) {
+  const m = maps[state.map];
+  if(x<0 || x>=m.w || y<0 || y>=m.h) return true;
+  const t = m.data[Math.floor(y)*m.w + Math.floor(x)];
+  return t===1; // Wall
+}
+
+function checkTileEvents() {
+  const m = maps[state.map];
+  const tx = Math.floor(state.x + 0.5);
+  const ty = Math.floor(state.y + 0.5);
+  const t = m.data[ty*m.w + tx];
+
+  // Exit
+  const ex = m.exits.find(e => e.x === tx && e.y === ty);
+  if(ex) {
+    state.map = ex.to;
+    state.x = ex.tx; state.y = ex.ty;
+    document.getElementById('loc-name').innerText = maps[state.map].name;
+    showToast("Entered " + maps[state.map].name);
+    return;
   }
 
-  function gameAction(action) {
-    if (state.energy <= 0 && action !== 'sleep') {
-      log("⚠️ Too tired! You fainted. Go sleep.");
-      return;
+  // Pak Guard (4) - Only trigger once per tile entry
+  if(t === 4) {
+    state.x -= 1; // Push back
+    triggerGuard();
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,width,height);
+
+  if (state.day > state.maxDays) {
+    drawEndScreen();
+    return;
+  }
+
+  const m = maps[state.map];
+  const cx = state.x * TILE_SIZE - width/2;
+  const cy = state.y * TILE_SIZE - height/2;
+
+  ctx.save();
+  ctx.translate(-cx, -cy);
+
+  for(let y=0; y<m.h; y++) {
+    for(let x=0; x<m.w; x++) {
+      const t = m.data[y*m.w + x];
+      const px = x*TILE_SIZE, py = y*TILE_SIZE;
+      
+      // Floor
+      ctx.fillStyle = C.floor; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+
+      // Objects
+      if(t===1) { ctx.fillStyle=C.wall; ctx.fillRect(px,py,TILE_SIZE,TILE_SIZE); }
+      if(t===2) { ctx.fillStyle=C.door; ctx.fillRect(px,py,TILE_SIZE,TILE_SIZE); }
+      if(t===3) { ctx.fillStyle=C.bed; ctx.fillRect(px+5,py+5,30,30); }
+      if(t===4) { ctx.fillStyle=C.guard; ctx.beginPath(); ctx.arc(px+20,py+20,15,0,7); ctx.fill(); }
+      if(t===5) { ctx.fillStyle=C.table; ctx.fillRect(px+5,py+10,30,20); }
+      if(t===6) { ctx.fillStyle=C.sport; ctx.fillRect(px+2,py+2,36,36); ctx.strokeStyle='#fff'; ctx.strokeRect(px+2,py+2,36,36); }
+      if(t===7) { ctx.fillStyle=C.book; ctx.fillRect(px,py,TILE_SIZE,TILE_SIZE); ctx.fillStyle='#fff'; ctx.fillText('|||', px+10, py+25); }
     }
-
-    // RNG Event Check
-    if (Math.random() < 0.1) {
-      triggerRandomEvent();
-    }
-
-    switch(action) {
-      case 'study':
-        if (confirm("Start 10s Pomodoro Timer for BONUS XP?")) {
-          startPomodoro();
-        } else {
-          updateStats(-20, 0.05, 0);
-          log("You studied briefly. (+GPA)");
-        }
-        break;
-      case 'eat':
-        if (state.money >= 10) {
-          updateStats(10, 0, -10);
-          log("Nasi Lemak acquired. (-RM10, +Energy)");
-        } else {
-          log("Not enough money! Makan Maggi instead? (-RM2)");
-          updateStats(5, -0.01, -2); // Poor diet hurts GPA
-        }
-        break;
-      case 'social':
-        updateStats(-15, -0.02, -15);
-        log("Lepak at Section 7. Fun but expensive. (-GPA, -RM)");
-        break;
-      case 'sleep':
-        state.energy = 100;
-        state.day++;
-        log("Day ended. Energy restored.");
-        checkWeek();
-        break;
-    }
-    render();
   }
 
-  function startPomodoro() {
-    log("⏱️ STUDYING... (Wait 5 seconds)");
-    // In real game, this would be 25 mins
-    setTimeout(() => {
-      updateStats(-30, 0.2, 0); // Huge GPA boost
-      log("✅ FOCUS MODE COMPLETE! Huge GPA Boost!");
-      render();
-    }, 5000); 
-  }
+  // Player
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(state.x*TILE_SIZE+8, state.y*TILE_SIZE+8, 24, 24);
+  
+  ctx.restore();
+}
 
-  function triggerRandomEvent() {
-    const events = [
-      { msg: "👮 Pak Guard spots you! 'Mana Matrik Card?'", cost: -20 },
-      { msg: "🚌 Bus is late. You missed class.", gpa: -0.1 },
-      { msg: "💸 PTPTN Masuk!", money: 100 }
-    ];
-    const ev = events[Math.floor(Math.random() * events.length)];
-    log(`EVENT: ${ev.msg}`);
-    if(ev.cost) state.money += ev.cost; // cost is negative
-    if(ev.money) state.money += ev.money;
-    if(ev.gpa) state.gpa += ev.gpa;
-  }
+function drawEndScreen() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,width,height);
+  ctx.fillStyle = '#fff';
+  ctx.font = "20px Courier New";
+  ctx.textAlign = "center";
+  
+  const pass = state.gpa >= 3.5;
+  ctx.fillText(pass ? "🏆 DEAN'S LIST!" : "💀 SEMESTER FAILED", width/2, height/3);
+  ctx.fillText(`Final CGPA: ${state.gpa.toFixed(2)}`, width/2, height/2);
+  
+  ctx.font = "14px Courier New";
+  ctx.fillText("Refresh to restart", width/2, height/1.5);
+}
 
-  function updateStats(e, g, m) {
-    state.energy += e;
-    state.gpa = parseFloat((state.gpa + g).toFixed(2));
-    state.money += m;
-    // Clamps
-    if(state.energy > 100) state.energy = 100;
-    if(state.gpa > 4.0) state.gpa = 4.0;
-  }
-
-  function checkWeek() {
-    if (state.day > 7) {
-      state.day = 1;
-      state.week++;
-      log(`📅 WEEK ${state.week} STARTED.`);
+// --- INTERACTIONS ---
+function handleInteract() {
+  const m = maps[state.map];
+  const tx = Math.floor(state.x + 0.5);
+  const ty = Math.floor(state.y + 0.5);
+  // Scan 3x3 area
+  for(let iy=-1; iy<=1; iy++) {
+    for(let ix=-1; ix<=1; ix++) {
+      const t = m.data[(ty+iy)*m.w + (tx+ix)];
+      if(t === 3) return confirmSleep();      // Bed
+      if(t === 5) return openStudyMenu();     // Table
+      if(t === 6) return openSportsMenu();    // Sports
+      if(t === 5 && state.map === 'cafe') return openFoodMenu(); // Cafe table
     }
   }
+}
 
-  function render() {
-    document.getElementById('val-energy').innerText = state.energy;
-    document.getElementById('val-gpa').innerText = state.gpa;
-    document.getElementById('val-money').innerText = state.money;
-    document.getElementById('day-display').innerText = `WK ${state.week} - DAY ${state.day}`;
+function confirmSleep() {
+  showModal("🛏️ End Day?", `Skip to Day ${state.day+1}? Energy will restore.`, [
+    {txt: "Sleep (Save)", cb: () => advanceDay()},
+    {txt: "Stay Awake", cb: closeMod}
+  ]);
+}
+
+function advanceDay() {
+  state.day++;
+  state.energy = 100;
+  updateUI();
+  closeMod();
+  showToast("Good Morning!");
+  if(state.day > state.maxDays) alert("SEMESTER OVER! Check results.");
+}
+
+function openStudyMenu() {
+  showModal("📚 Study Session", "Use the Pomodoro Timer to gain massive CGPA.", [
+    {txt: "⏱️ Start Pomodoro (Bonus)", cb: startPomodoro},
+    {txt: "📖 Quick Read (-10 NRGY)", cb: () => quickAction('study')},
+    {txt: "Cancel", cb: closeMod}
+  ]);
+}
+
+function openSportsMenu() {
+  showModal("⚽ Co-Curriculum", "Play Futsal to improve soft skills (CGPA).", [
+    {txt: "Play (-20 NRGY, +0.1 GPA)", cb: () => quickAction('sport')},
+    {txt: "Cancel", cb: closeMod}
+  ]);
+}
+
+function triggerGuard() {
+  showModal("👮 PAK GUARD!", "Where is your student ID?!", [
+    {txt: "Reason (High Int)", cb: () => resolveGuard('reason')},
+    {txt: "Run (Agility)", cb: () => resolveGuard('run')}
+  ]);
+}
+
+function resolveGuard(type) {
+  closeMod();
+  if (Math.random() > 0.5) {
+    showToast("Escaped safely!");
+  } else {
+    state.money -= 20;
+    state.gpa -= 0.05; // Emotional damage
+    showToast("Kena Saman! (-RM20)");
   }
+  updateUI();
+}
+
+function quickAction(type) {
+  closeMod();
+  if(state.energy < 20) { showToast("Too tired!"); return; }
+  
+  if(type === 'study') {
+    state.energy -= 10;
+    state.gpa += 0.02;
+    showToast("Studied. (+0.02 GPA)");
+  } else if (type === 'sport') {
+    state.energy -= 20;
+    state.gpa += 0.10; // Big boost
+    showToast("Great workout! (+0.10 GPA)");
+  }
+  updateUI();
+}
+
+// --- POMODORO SYSTEM ---
+let pomoTimer;
+function startPomodoro() {
+  closeMod();
+  const ov = document.getElementById('pomo-overlay');
+  const disp = document.getElementById('timer-display');
+  ov.style.display = 'flex';
+  
+  // Fast simulation for demo (5 seconds = 25 mins)
+  let timeLeft = 5; 
+  disp.innerText = "FOCUS...";
+  
+  pomoTimer = setInterval(() => {
+    timeLeft--;
+    disp.innerText = timeLeft;
+    if(timeLeft <= 0) {
+      clearInterval(pomoTimer);
+      ov.style.display = 'none';
+      completePomo();
+    }
+  }, 1000);
+}
+
+function completePomo() {
+  state.energy -= 30;
+  state.gpa += 0.25; // Huge Reward
+  state.money += 10; // "Allowance"
+  showToast("FOCUS COMPLETE! (+0.25 GPA, +RM10)");
+  updateUI();
+}
+
+// --- UI UTILS ---
+function updateUI() {
+  // Clamps
+  if(state.energy < 0) state.energy = 0;
+  if(state.gpa > 4.0) state.gpa = 4.0;
+  if(state.day > 14) state.day = 15;
+
+  document.getElementById('hp-bar').style.width = state.energy + "%";
+  document.getElementById('money-disp').innerText = state.money.toFixed(0);
+  document.getElementById('gpa-disp').innerText = state.gpa.toFixed(2);
+  document.getElementById('day-disp').innerText = `DAY ${state.day}/${state.maxDays}`;
+}
+
+function showModal(title, desc, choices) {
+  document.getElementById('m-title').innerText = title;
+  document.getElementById('m-desc').innerText = desc;
+  const cDiv = document.getElementById('m-choices');
+  cDiv.innerHTML = '';
+  choices.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.innerText = c.txt;
+    b.onclick = c.cb;
+    cDiv.appendChild(b);
+  });
+  document.getElementById('modal').style.display = 'block';
+}
+
+function closeMod() { document.getElementById('modal').style.display = 'none'; }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerText = msg;
+  t.style.opacity = 1;
+  setTimeout(()=>t.style.opacity=0, 2000);
+}
+
 </script>
 </body>
 </html>
