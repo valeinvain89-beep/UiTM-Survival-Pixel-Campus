@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6A0DAD"> <!-- UiTM Purple -->
+<title>PixelCampus: Survival</title>
+<style>
+  :root { --bg: #2d2d2d; --text: #f0f0f0; --accent: #A64AC9; --pixel-font: 'Courier New', monospace; }
+  body { background: var(--bg); color: var(--text); font-family: var(--pixel-font); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  
+  /* UI Components */
+  .header { padding: 15px; background: #1a1a1a; border-bottom: 4px solid var(--accent); display: flex; justify-content: space-between; }
+  .stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #333; font-size: 0.8rem; }
+  .stat-box { background: #444; padding: 5px; text-align: center; border: 2px solid #000; }
+  
+  .game-view { flex: 1; position: relative; background-image: repeating-linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%, #333), repeating-linear-gradient(45deg, #333 25%, #2d2d2d 25%, #2d2d2d 75%, #333 75%, #333); background-position: 0 0, 10px 10px; background-size: 20px 20px; display: flex; align-items: center; justify-content: center; }
+  .pixel-art-sprite { width: 64px; height: 64px; background: var(--accent); box-shadow: 4px 4px 0px #000; image-rendering: pixelated; }
+  
+  .log-panel { height: 150px; overflow-y: auto; background: #000; color: #0f0; padding: 10px; font-size: 0.9rem; border-top: 4px solid var(--accent); }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; background: #1a1a1a; }
+  
+  button { background: var(--accent); color: white; border: 4px solid #1a1a1a; padding: 15px; font-family: var(--pixel-font); font-weight: bold; text-transform: uppercase; touch-action: manipulation; active { transform: translate(2px, 2px); } }
+  
+  /* PWA Manifest Link (Simulated) */
+  link[rel="manifest"] { href: "/manifest.json"; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>LVL 1 FRESHIE</div>
+  <div id="day-display">WK 1 - MON</div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-box">⚡ ENERGY: <span id="val-energy">100</span>%</div>
+  <div class="stat-box">🧠 CGPA: <span id="val-gpa">3.50</span></div>
+  <div class="stat-box">💰 RM: <span id="val-money">150</span></div>
+</div>
+
+<div class="game-view">
+  <!-- Placeholder for Canvas/Sprite -->
+  <div class="pixel-art-sprite" id="player-sprite"></div>
+  <div style="position:absolute; bottom: 20px; text-shadow: 2px 2px 0 #000;">Location: Kolej Melati</div>
+</div>
+
+<div class="log-panel" id="game-log">
+  > Welcome to UiTM Simulator.<br>
+  > Orientation week is over.<br>
+</div>
+
+<div class="controls">
+  <button onclick="gameAction('study')">📚 Study (Pomodoro)</button>
+  <button onclick="gameAction('eat')">🍔 Eat (Mamak)</button>
+  <button onclick="gameAction('social')">🗣️ Lepak</button>
+  <button onclick="gameAction('sleep')">🛌 Sleep</button>
+</div>
+
+<script>
+  // Game State
+  let state = { energy: 100, gpa: 3.50, money: 150, week: 1, day: 1 };
+  const maxWeeks = 14;
+
+  function log(msg) {
+    const panel = document.getElementById('game-log');
+    panel.innerHTML = `> ${msg}<br>` + panel.innerHTML;
+  }
+
+  function gameAction(action) {
+    if (state.energy <= 0 && action !== 'sleep') {
+      log("⚠️ Too tired! You fainted. Go sleep.");
+      return;
+    }
+
+    // RNG Event Check
+    if (Math.random() < 0.1) {
+      triggerRandomEvent();
+    }
+
+    switch(action) {
+      case 'study':
+        if (confirm("Start 10s Pomodoro Timer for BONUS XP?")) {
+          startPomodoro();
+        } else {
+          updateStats(-20, 0.05, 0);
+          log("You studied briefly. (+GPA)");
+        }
+        break;
+      case 'eat':
+        if (state.money >= 10) {
+          updateStats(10, 0, -10);
+          log("Nasi Lemak acquired. (-RM10, +Energy)");
+        } else {
+          log("Not enough money! Makan Maggi instead? (-RM2)");
+          updateStats(5, -0.01, -2); // Poor diet hurts GPA
+        }
+        break;
+      case 'social':
+        updateStats(-15, -0.02, -15);
+        log("Lepak at Section 7. Fun but expensive. (-GPA, -RM)");
+        break;
+      case 'sleep':
+        state.energy = 100;
+        state.day++;
+        log("Day ended. Energy restored.");
+        checkWeek();
+        break;
+    }
+    render();
+  }
+
+  function startPomodoro() {
+    log("⏱️ STUDYING... (Wait 5 seconds)");
+    // In real game, this would be 25 mins
+    setTimeout(() => {
+      updateStats(-30, 0.2, 0); // Huge GPA boost
+      log("✅ FOCUS MODE COMPLETE! Huge GPA Boost!");
+      render();
+    }, 5000); 
+  }
+
+  function triggerRandomEvent() {
+    const events = [
+      { msg: "👮 Pak Guard spots you! 'Mana Matrik Card?'", cost: -20 },
+      { msg: "🚌 Bus is late. You missed class.", gpa: -0.1 },
+      { msg: "💸 PTPTN Masuk!", money: 100 }
+    ];
+    const ev = events[Math.floor(Math.random() * events.length)];
+    log(`EVENT: ${ev.msg}`);
+    if(ev.cost) state.money += ev.cost; // cost is negative
+    if(ev.money) state.money += ev.money;
+    if(ev.gpa) state.gpa += ev.gpa;
+  }
+
+  function updateStats(e, g, m) {
+    state.energy += e;
+    state.gpa = parseFloat((state.gpa + g).toFixed(2));
+    state.money += m;
+    // Clamps
+    if(state.energy > 100) state.energy = 100;
+    if(state.gpa > 4.0) state.gpa = 4.0;
+  }
+
+  function checkWeek() {
+    if (state.day > 7) {
+      state.day = 1;
+      state.week++;
+      log(`📅 WEEK ${state.week} STARTED.`);
+    }
+  }
+
+  function render() {
+    document.getElementById('val-energy').innerText = state.energy;
+    document.getElementById('val-gpa').innerText = state.gpa;
+    document.getElementById('val-money').innerText = state.money;
+    document.getElementById('day-display').innerText = `WK ${state.week} - DAY ${state.day}`;
+  }
+</script>
+</body>
+</html>
